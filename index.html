@@ -396,10 +396,26 @@
             font-weight: 600;
             cursor: pointer;
             font-size: 1em;
+            margin: 5px;
         }
 
         .modal-btn:hover {
             background: #5568d3;
+        }
+
+        .modal-btn.secondary {
+            background: #28a745;
+        }
+
+        .modal-btn.secondary:hover {
+            background: #218838;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
         }
 
         .spinner {
@@ -513,10 +529,6 @@
                     </div>
 
                     <div class="submit-options">
-                        <button class="submit-btn" id="submitEmailJS" onclick="submitOrderEmailJS()">📧 Send via EmailJS</button>
-                        
-                        <div class="option-divider">— OR —</div>
-                        
                         <button class="submit-btn secondary" id="openEmailClient" onclick="openEmailClient()">📮 Open Email Client</button>
                         
                         <div class="option-divider">— OR —</div>
@@ -533,22 +545,27 @@
             <div class="modal-icon" id="modalIcon"></div>
             <div class="modal-title" id="modalTitle"></div>
             <div class="modal-message" id="modalMessage"></div>
-            <button class="modal-btn" id="modalBtn" onclick="closeModal()">Close</button>
+            <div class="modal-buttons" id="modalButtons">
+                <button class="modal-btn" id="modalBtn" onclick="closeModal()">Close</button>
+            </div>
         </div>
     </div>
 
-    <!-- EmailJS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script>
-        // ⚠️ REPLACE THESE THREE VALUES WITH YOUR OWN FROM EMAILJS ⚠️
-        const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY_HERE';
-        const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID_HERE';
-        const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID_HERE';
-        
-        // Initialize EmailJS (only if keys are configured)
-        if (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE') {
-            emailjs.init(EMAILJS_PUBLIC_KEY);
-        }
+        // ⚙️ CONFIGURATION OPTIONS ⚙️
+        const SHOW_DOWNLOAD_OPTION = true; // Set to false to hide the Download button
+
+        // Apply configuration on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!SHOW_DOWNLOAD_OPTION) {
+                const downloadBtn = document.getElementById('downloadOrder');
+                if (downloadBtn) downloadBtn.style.display = 'none';
+                
+                // Hide the divider before download button
+                const dividers = document.querySelectorAll('.option-divider');
+                if (dividers.length > 0) dividers[dividers.length - 1].style.display = 'none';
+            }
+        });
 
         const products = [
             {"category":"Drinkware","name":"11oz Mug (white)","price":8.5},
@@ -787,21 +804,93 @@ Please contact E3 Achievement to confirm this order:
 331 West Jackson St., Battle Creek`;
         }
 
+        // --- Download a ready-to-send .eml file (opens in most mail clients) ---
+        function downloadEML(subject, body, to = 'imageinboxe3@gmail.com') {
+            const eml = [
+                `To: ${to}`,
+                `Subject: ${subject}`,
+                'MIME-Version: 1.0',
+                'Content-Type: text/plain; charset=UTF-8',
+                'Content-Transfer-Encoding: 7bit',
+                '',
+                body.replace(/\r?\n/g, '\r\n')
+            ].join('\r\n');
+
+            const blob = new Blob([eml], { type: 'message/rfc822' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `E3-Order-${Date.now()}.eml`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
+        // --- Open Gmail web compose ---
+        function openGmailCompose() {
+            if (!window.lastOrderText) {
+                showModal('⚠️', 'Error', 'No order data available. Please try again.');
+                return;
+            }
+            
+            const subject = `E3 Achievement Order`;
+            const body = window.lastOrderText;
+            const to = 'imageinboxe3@gmail.com';
+            
+            const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.open(gmailUrl, '_blank');
+            
+            closeModal();
+        }
+
+        // --- Robust mailto path with CRLF newlines + length guard ---
         function openEmailClient() {
             const details = getOrderDetails();
             if (!details) return;
 
+            const to = 'imageinboxe3@gmail.com';
             const subject = `E3 Achievement Order - ${details.orderNumber}`;
-            const body = formatOrderText(details);
-            
-            const mailtoLink = `mailto:imageinboxe3@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            
-            // Try to open email client
-            window.location.href = mailtoLink;
-            
-            // Show confirmation modal
-            showModal('📮', 'Opening Email Client', 
-                'Your default email application should open with the order details pre-filled. If it doesn\'t open automatically, please email your order to imageinboxe3@gmail.com or call 269-924-7247.');
+            const body = formatOrderText(details).replace(/\r?\n/g, '\r\n'); // CRLF for Outlook compatibility
+
+            const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+            // Store body for clipboard copy and Gmail fallback
+            window.lastOrderText = formatOrderText(details);
+
+            // Conservative limit for cross-client reliability
+            if (mailto.length <= 1800) {
+                window.location.href = mailto;
+                
+                const buttons = `
+                    <button class="modal-btn secondary" onclick="openGmailCompose()">📧 Open Gmail</button>
+                    <button class="modal-btn secondary" id="copyBtn" onclick="copyToClipboard(window.lastOrderText)">📋 Copy Order</button>
+                    <button class="modal-btn" onclick="closeModal()">Close</button>
+                `;
+                
+                showModal(
+                    '📮',
+                    'Opening Email App',
+                    'Your default email application should open with the order details pre-filled. If it doesn\'t open, use one of the options below:',
+                    buttons
+                );
+            } else {
+                // Body is too long for mailto — fall back to downloadable email draft
+                downloadEML(subject, body, to);
+                
+                const buttons = `
+                    <button class="modal-btn secondary" onclick="openGmailCompose()">📧 Open Gmail</button>
+                    <button class="modal-btn secondary" id="copyBtn" onclick="copyToClipboard(window.lastOrderText)">📋 Copy Order</button>
+                    <button class="modal-btn" onclick="closeModal()">Close</button>
+                `;
+                
+                showModal(
+                    '✉️',
+                    'Email Draft Downloaded',
+                    'Your order was too long for a direct email link, so we created an email draft (.eml file) in your Downloads folder. You can also use these alternative options:',
+                    buttons
+                );
+            }
         }
 
         function downloadOrder() {
@@ -809,6 +898,9 @@ Please contact E3 Achievement to confirm this order:
             if (!details) return;
 
             const orderText = formatOrderText(details);
+            
+            // Store for clipboard/Gmail options
+            window.lastOrderText = orderText;
             
             // Create a blob and download
             const blob = new Blob([orderText], { type: 'text/plain' });
@@ -821,7 +913,7 @@ Please contact E3 Achievement to confirm this order:
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
             
-            // Show instructions modal
+            // Show instructions modal with helpful buttons
             const instructions = `<div class="instructions-box">
                 <h4>📧 How to Send Your Order:</h4>
                 <ol>
@@ -832,11 +924,16 @@ Please contact E3 Achievement to confirm this order:
                     <li><strong>Attach the file:</strong> Click the attachment button and select the downloaded text file</li>
                     <li><strong>Send:</strong> Click send and you're done!</li>
                 </ol>
-                <p style="margin-top: 15px;"><strong>Alternative:</strong> Open the text file, copy the contents, and paste directly into the email body.</p>
-                <p style="margin-top: 10px;"><strong>Questions?</strong> Call us at 269-924-7247</p>
+                <p style="margin-top: 15px;"><strong>Quick alternatives below:</strong></p>
             </div>`;
             
-            showModal('💾', 'Order Downloaded!', instructions);
+            const buttons = `
+                <button class="modal-btn secondary" onclick="openGmailCompose()">📧 Open Gmail</button>
+                <button class="modal-btn secondary" id="copyBtn" onclick="copyToClipboard(window.lastOrderText)">📋 Copy Order</button>
+                <button class="modal-btn" onclick="closeModal()">Close</button>
+            `;
+            
+            showModal('💾', 'Order Downloaded!', instructions, buttons);
         }
 
         async function submitOrderEmailJS() {
@@ -897,15 +994,38 @@ Please contact E3 Achievement to confirm this order:
             document.getElementById('specialInstructions').value = '';
         }
 
-        function showModal(icon, title, message) {
+        function showModal(icon, title, message, buttons = null) {
             document.getElementById('modalIcon').textContent = icon;
             document.getElementById('modalTitle').textContent = title;
             document.getElementById('modalMessage').innerHTML = message;
+            
+            const modalButtons = document.getElementById('modalButtons');
+            if (buttons) {
+                modalButtons.innerHTML = buttons;
+            } else {
+                modalButtons.innerHTML = '<button class="modal-btn" onclick="closeModal()">Close</button>';
+            }
+            
             document.getElementById('modal').classList.add('show');
         }
 
         function closeModal() {
             document.getElementById('modal').classList.remove('show');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const copyBtn = document.getElementById('copyBtn');
+                if (copyBtn) {
+                    copyBtn.textContent = '✓ Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = '📋 Copy to Clipboard';
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy. Please try again.');
+            });
         }
 
         document.getElementById('searchBox').addEventListener('input', renderProducts);
