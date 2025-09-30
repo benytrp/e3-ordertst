@@ -278,7 +278,14 @@
             outline: none;
             border-color: #ff6b35;
         }
-        
+
+        .submit-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
         .submit-btn {
             width: 100%;
             padding: 15px;
@@ -296,10 +303,26 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(255,107,53,0.3);
         }
+
+        .submit-btn.secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .submit-btn.tertiary {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
         
         .submit-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
+            transform: none;
+        }
+
+        .option-divider {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            margin: 10px 0;
         }
         
         .policy-note {
@@ -315,6 +338,106 @@
             text-align: center;
             color: #999;
             padding: 40px 20px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.8em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .modal-message {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+            text-align: left;
+        }
+
+        .modal-btn {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .modal-btn:hover {
+            background: #5568d3;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #ff6b35;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .instructions-box {
+            background: #e7f3ff;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: left;
+        }
+
+        .instructions-box h4 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+
+        .instructions-box ol {
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+
+        .instructions-box li {
+            margin-bottom: 8px;
         }
         
         @media (max-width: 968px) {
@@ -388,13 +511,45 @@
                         <label class="form-label">Special Instructions:</label>
                         <textarea class="form-input" id="specialInstructions" rows="3"></textarea>
                     </div>
-                    <button class="submit-btn" id="submitOrder">📧 Send Order</button>
+
+                    <div class="submit-options">
+                        <button class="submit-btn" id="submitEmailJS" onclick="submitOrderEmailJS()">📧 Send via EmailJS</button>
+                        
+                        <div class="option-divider">— OR —</div>
+                        
+                        <button class="submit-btn secondary" id="openEmailClient" onclick="openEmailClient()">📮 Open Email Client</button>
+                        
+                        <div class="option-divider">— OR —</div>
+                        
+                        <button class="submit-btn tertiary" id="downloadOrder" onclick="downloadOrder()">💾 Download Order</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-icon" id="modalIcon"></div>
+            <div class="modal-title" id="modalTitle"></div>
+            <div class="modal-message" id="modalMessage"></div>
+            <button class="modal-btn" id="modalBtn" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- EmailJS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script>
+        // ⚠️ REPLACE THESE THREE VALUES WITH YOUR OWN FROM EMAILJS ⚠️
+        const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY_HERE';
+        const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID_HERE';
+        const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID_HERE';
+        
+        // Initialize EmailJS (only if keys are configured)
+        if (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE') {
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        }
+
         const products = [
             {"category":"Drinkware","name":"11oz Mug (white)","price":8.5},
             {"category":"Drinkware","name":"11oz Mug (colored interior)","price":12.0},
@@ -499,11 +654,11 @@
 
             const grid = document.getElementById('productGrid');
             grid.innerHTML = filtered.map((product, idx) => `
-                <div class="product-card" onclick="addToCart(${idx})">
+                <div class="product-card" onclick="addToCart(${products.indexOf(product)})">
                     <div class="product-name">${product.name}</div>
                     <div class="product-details">${product.category}</div>
                     <div class="product-price">$${product.price.toFixed(2)}</div>
-                    <button class="add-to-cart-btn" onclick="event.stopPropagation(); addToCart(${idx})">+ Add to Cart</button>
+                    <button class="add-to-cart-btn" onclick="event.stopPropagation(); addToCart(${products.indexOf(product)})">+ Add to Cart</button>
                 </div>
             `).join('');
         }
@@ -566,9 +721,7 @@
             formDiv.style.display = 'block';
         }
 
-        document.getElementById('searchBox').addEventListener('input', renderProducts);
-
-        document.getElementById('submitOrder').addEventListener('click', function() {
+        function getOrderDetails() {
             const studentName = document.getElementById('studentName').value;
             const customerName = document.getElementById('customerName').value;
             const customerEmail = document.getElementById('customerEmail').value;
@@ -577,42 +730,185 @@
             const specialInstructions = document.getElementById('specialInstructions').value;
             
             if (!customerName || !customerEmail) {
-                alert('Please fill in your name and email address.');
-                return;
+                showModal('⚠️', 'Required Fields', 'Please fill in your name and email address.');
+                return null;
             }
-            
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(customerEmail)) {
+                showModal('⚠️', 'Invalid Email', 'Please enter a valid email address.');
+                return null;
+            }
+
             const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const orderDetails = cart.map(item => 
+            const orderNumber = `E3-${Date.now()}`;
+            
+            return {
+                orderNumber,
+                studentName: studentName || 'N/A',
+                customerName,
+                customerEmail,
+                customerPhone: customerPhone || 'N/A',
+                customerAddress: customerAddress || 'N/A',
+                specialInstructions: specialInstructions || 'None',
+                total,
+                orderDate: new Date().toLocaleString()
+            };
+        }
+
+        function formatOrderText(details) {
+            const itemsList = cart.map(item => 
                 `${item.quantity}x ${item.name} @ $${item.price.toFixed(2)} = $${(item.price * item.quantity).toFixed(2)}`
             ).join('\n');
-            
-            const emailBody = `NEW ORDER FROM E3 ACHIEVEMENT WEBSITE
+
+            return `E3 ACHIEVEMENT ORDER
+Order #: ${details.orderNumber}
+Date: ${details.orderDate}
 
 CUSTOMER INFORMATION:
-Student Entrepreneur: ${studentName}
-Customer Name: ${customerName}
-Email: ${customerEmail}
-Phone: ${customerPhone}
-Address: ${customerAddress}
+Name: ${details.customerName}
+Email: ${details.customerEmail}
+Phone: ${details.customerPhone}
+Address: ${details.customerAddress}
+Student Entrepreneur: ${details.studentName}
 
-ORDER DETAILS:
-${orderDetails}
+ORDER ITEMS:
+${itemsList}
 
-TOTAL: $${total.toFixed(2)}
+TOTAL: $${details.total.toFixed(2)}
 
 SPECIAL INSTRUCTIONS:
-${specialInstructions}
+${details.specialInstructions}
 
 ---
-Order submitted: ${new Date().toLocaleString()}`;
+Please contact E3 Achievement to confirm this order:
+📞 269-924-7247
+✉️ imageinboxe3@gmail.com
+331 West Jackson St., Battle Creek`;
+        }
 
-            const subject = `E3 Order from ${customerName} - $${total.toFixed(2)}`;
-            const mailtoLink = `mailto:imageinboxe3@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        function openEmailClient() {
+            const details = getOrderDetails();
+            if (!details) return;
+
+            const subject = `E3 Achievement Order - ${details.orderNumber}`;
+            const body = formatOrderText(details);
             
+            const mailtoLink = `mailto:imageinboxe3@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            // Try to open email client
             window.location.href = mailtoLink;
             
-            alert('Your order form will open in your email client. Please send the email to complete your order!');
-        });
+            // Show confirmation modal
+            showModal('📮', 'Opening Email Client', 
+                'Your default email application should open with the order details pre-filled. If it doesn\'t open automatically, please email your order to imageinboxe3@gmail.com or call 269-924-7247.');
+        }
+
+        function downloadOrder() {
+            const details = getOrderDetails();
+            if (!details) return;
+
+            const orderText = formatOrderText(details);
+            
+            // Create a blob and download
+            const blob = new Blob([orderText], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `E3-Order-${details.orderNumber}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            // Show instructions modal
+            const instructions = `<div class="instructions-box">
+                <h4>📧 How to Send Your Order:</h4>
+                <ol>
+                    <li><strong>Locate the downloaded file:</strong> Check your Downloads folder for "E3-Order-${details.orderNumber}.txt"</li>
+                    <li><strong>Open your email:</strong> Start a new email in your preferred email client (Gmail, Outlook, etc.)</li>
+                    <li><strong>Address the email to:</strong> imageinboxe3@gmail.com</li>
+                    <li><strong>Subject line:</strong> "E3 Achievement Order"</li>
+                    <li><strong>Attach the file:</strong> Click the attachment button and select the downloaded text file</li>
+                    <li><strong>Send:</strong> Click send and you're done!</li>
+                </ol>
+                <p style="margin-top: 15px;"><strong>Alternative:</strong> Open the text file, copy the contents, and paste directly into the email body.</p>
+                <p style="margin-top: 10px;"><strong>Questions?</strong> Call us at 269-924-7247</p>
+            </div>`;
+            
+            showModal('💾', 'Order Downloaded!', instructions);
+        }
+
+        async function submitOrderEmailJS() {
+            if (EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY_HERE') {
+                showModal('⚠️', 'EmailJS Not Configured', 
+                    'EmailJS credentials are not configured. Please use the "Open Email Client" or "Download Order" option instead.');
+                return;
+            }
+
+            const details = getOrderDetails();
+            if (!details) return;
+
+            const submitBtn = document.getElementById('submitEmailJS');
+            const itemsList = cart.map(item => 
+                `${item.quantity}x ${item.name} @ $${item.price.toFixed(2)} = $${(item.price * item.quantity).toFixed(2)}`
+            ).join('\n');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="spinner"></div>';
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                    order_number: details.orderNumber,
+                    student_name: details.studentName,
+                    customer_name: details.customerName,
+                    customer_email: details.customerEmail,
+                    customer_phone: details.customerPhone,
+                    customer_address: details.customerAddress,
+                    special_instructions: details.specialInstructions,
+                    items_list: itemsList,
+                    total: details.total.toFixed(2),
+                    order_date: details.orderDate
+                });
+                
+                showModal('✅', 'Order Submitted!', 
+                    `Thank you ${details.customerName}! Your order has been received. We'll contact you shortly at ${details.customerEmail}.`);
+                
+                clearForm();
+                
+            } catch (error) {
+                console.error('Order submission error:', error);
+                showModal('❌', 'Submission Failed', 
+                    'There was an error submitting your order via EmailJS. Please try the "Open Email Client" or "Download Order" option instead, or contact us at 269-924-7247.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '📧 Send via EmailJS';
+            }
+        }
+
+        function clearForm() {
+            cart = [];
+            renderCart();
+            document.getElementById('studentName').value = '';
+            document.getElementById('customerName').value = '';
+            document.getElementById('customerEmail').value = '';
+            document.getElementById('customerPhone').value = '';
+            document.getElementById('customerAddress').value = '';
+            document.getElementById('specialInstructions').value = '';
+        }
+
+        function showModal(icon, title, message) {
+            document.getElementById('modalIcon').textContent = icon;
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').innerHTML = message;
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        document.getElementById('searchBox').addEventListener('input', renderProducts);
 
         renderCategories();
         renderProducts();
